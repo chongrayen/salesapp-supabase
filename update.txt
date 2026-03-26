@@ -1,0 +1,6 @@
+updates to make to the app
+- i want to upload this website so it is usable from any device.
+1. where will i store and upload my excel sheets? is there a way to save the folder somewhere, so i can upload to this folder when i have new excel sheets?
+- when i use the in-website adding feature, where will these new entries be stored?
+prepare the website such that it can go live, and go onto github repo as well
+- the top of excel sheet says purchases by supplier detail- arrow, why are the purchases all unknown supplier? fix it

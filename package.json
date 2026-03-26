@@ -1,0 +1,25 @@
+{
+  "name": "salesapp",
+  "version": "1.0.0",
+  "description": "Local viewer for Arrow purchases data",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+<<<<<<< HEAD
+    "express": "^5.2.1",                                                                                             
+    "xlsx": "^0.18.5",                                                                                               
+    "@azure/identity": "^4.2.0",                                                                                     
+    "@microsoft/microsoft-graph-client": "^3.0.0",                                                                   
+    "@supabase/supabase-js": "^2.0.0"  
+=======
+    "express": "^5.2.1",
+    "xlsx": "^0.18.5",
+    "@supabase/supabase-js": "^2.49.1"
+>>>>>>> acb8883 (Switch SalesApp storage from Azure/Graph to Supabase)
+  }
+}

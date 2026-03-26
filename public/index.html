@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SalesApp · Parts Explorer</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">ADVINNO · SalesApp</p>
+        <h1>Parts purchase snapshots</h1>
+        <p class="subtitle">
+          Scroll through every component we buy across suppliers, add ad-hoc purchases on the fly, and drill into the
+          details in a single click.
+        </p>
+      </div>
+      <div class="header-actions">
+        <a id="openDataFolderBtn" class="action-btn" href="#" target="_blank" rel="noopener" style="display: none;">📂 Open Data Folder</a>
+        <div class="stats" id="summaryStats">
+          <div class="stat">
+            <span class="label">Records</span>
+            <strong id="totalRecords">0</strong>
+          </div>
+          <div class="stat">
+            <span class="label">Unique parts</span>
+            <strong id="uniqueParts">0</strong>
+          </div>
+          <div class="stat">
+            <span class="label">Total spend</span>
+            <strong id="totalSpend">$0</strong>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="controls">
+      <label>
+        <span>Quick search</span>
+        <input
+          id="searchInput"
+          type="text"
+          placeholder="Search by part number, PO, supplier or remark"
+          autocomplete="off"
+        />
+      </label>
+      <label>
+        <span>Sort by</span>
+        <select id="sortSelect">
+          <option value="date-desc">Newest first</option>
+          <option value="date-asc">Oldest first</option>
+          <option value="price-desc">Price high → low</option>
+          <option value="price-asc">Price low → high</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="entry-panel">
+      <button type="button" class="ghost-btn" id="toggleEntryForm">➕ Add manual entry</button>
+      <form id="entryForm" class="entry-form" hidden>
+        <div class="form-grid">
+          <label>
+            <span>Supplier</span>
+            <input type="text" name="supplier" required placeholder="Arrow, DigiKey, ..." />
+          </label>
+          <label>
+            <span>Date</span>
+            <input type="date" name="date" required />
+          </label>
+          <label>
+            <span>Part number</span>
+            <input type="text" name="partNo" required placeholder="10AS066H3F34I2SG" />
+          </label>
+          <label>
+            <span>PO / Reference</span>
+            <input type="text" name="po" placeholder="PO12345" />
+          </label>
+          <label>
+            <span>Quantity</span>
+            <input type="number" name="qty" min="1" step="1" required />
+          </label>
+          <label>
+            <span>Unit price (SGD)</span>
+            <input type="number" name="price" min="0" step="0.01" required />
+          </label>
+          <label class="remark-field">
+            <span>Remark</span>
+            <textarea name="remark" rows="2" placeholder="Optional note"></textarea>
+          </label>
+        </div>
+        <div class="form-actions">
+          <span id="entryStatus" class="entry-status" role="status"></span>
+          <div class="button-row">
+            <button type="button" class="ghost-btn" id="cancelEntryBtn">Cancel</button>
+            <button type="submit" class="primary-btn">Save entry</button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <main class="app-layout">
+      <section class="list-panel" id="partList" aria-live="polite"></section>
+      <section class="detail-panel" id="detailPanel">
+        <div class="placeholder">
+          <h2>Pick a part</h2>
+          <p>Tap any record on the left to view the full breakdown.</p>
+        </div>
+      </section>
+    </main>
+
+    <template id="partCardTemplate">
+      <article class="part-card">
+        <div class="primary-line">
+          <h3 class="part-number"></h3>
+          <span class="po"></span>
+        </div>
+        <div class="supplier-line">
+          <span class="supplier-badge"></span>
+          <span class="date"></span>
+        </div>
+        <div class="meta-line">
+          <span class="qty"></span>
+          <span class="price"></span>
+        </div>
+        <div class="price-line">
+          <span class="total"></span>
+        </div>
+        <p class="remark"></p>
+      </article>
+    </template>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>

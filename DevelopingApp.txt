@@ -1,0 +1,20 @@
+Read this file and develop an app for me.
+Purpose of app: Read excel sheet data and display information in the app. The excel sheet contains information on transactions between companies buying and selling parts, I want the information to be concisely displayed in the app so i can check on past part purchases when im on the go. when i scroll through parts, each display will include information on the parts i click on. 
+
+develop the backend and frontend for me, so i can run and test it locally first.
+
+Required outcome data headers:
+Date, Part No, Price, Qty, Total Price, PO, Remark
+
+
+How to interpret the excel sheet header columns
+- date is date, help me convert DD/MM/YYYY to DDMMYY eg 3 Aug 2021
+- Transaction can be recorded as hidden info for now
+- Number will correspond to PO (eg PO212445 is PO)
+- Product/Service full name can be hidden info for now
+- Memo/description will contain the Part No, eg 10M04DCF256I7G is a Part No
+- y/qty corresponds to Qty
+- Rate will correspond to the price
+- Amount will correspond to total price
+- Balance can be hidden for now
+
