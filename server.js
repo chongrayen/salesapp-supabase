@@ -532,18 +532,18 @@ app.get('/api/reload', async (req, res) => {
   }
 });
 
-app.get('*', (req, res) => {
-  const indexPath = path.join(__dirname, 'public', 'index.html');
-  fs.readFile(indexPath, 'utf8', (err, html) => {
-    if (err) {
-      console.error('Failed to read index.html:', err);
-      return res.status(500).send('Error loading page');
-    }
-    const injection = `\n<script>window.__SHARED_FOLDER_URL__ = ${JSON.stringify(SHARED_FOLDER_URL)};</script>\n`;
-    const modifiedHtml = html.replace('</body>', `${injection}</body>`);
-    res.send(modifiedHtml);
-  });
-});
+app.use((req, res) => {                                                                                              
+     const indexPath = path.join(__dirname, 'public', 'index.html');                                                    
+     fs.readFile(indexPath, 'utf8', (err, html) => {                                                                    
+       if (err) {                                                                                                       
+         console.error('Failed to read index.html:', err);                                                              
+         return res.status(500).send('Error loading page');                                                             
+       }                                                                                                                
+       const injection = `\n<script>window.__SHARED_FOLDER_URL__ = ${JSON.stringify(SHARED_FOLDER_URL)};</script>\n`;   
+       const modifiedHtml = html.replace('</body>', `${injection}</body>`);                                             
+       res.send(modifiedHtml);                                                                                          
+     });                                                                                                                
+   });   
 
 initializeWorkbooks().catch(console.error);
 
