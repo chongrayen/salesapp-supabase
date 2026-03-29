@@ -1,58 +1,133 @@
-# Sales Overview Website
+# SalesApp
 
-A lightweight Node.js + vanilla JS dashboard that ingests all of your supplier spreadsheets and turns them into an interactive sales command center. Drop Excel exports into `workbooks/`, hit reload, and the site recalculates supplier summaries, transaction timelines, and per-part drill‑downs. A manual entry form keeps the data set current between spreadsheet drops.
+SalesApp is a lightweight Node.js app for browsing part purchase history from supplier Excel exports. It loads workbook rows into a simple web UI, lets you search and sort purchase records, and supports manual entry for transactions that have not made it into the spreadsheets yet.
 
-## Features at a glance
+The app can read `.xlsx` files from either:
 
-- **Multi-workbook ingestion**: every `.xlsx` inside `workbooks/` (or the folder pointed to by `WORKBOOKS_DIR`) is parsed and merged.
-- **Supplier-aware summaries**: totals, average prices, and transaction counts grouped by supplier + source workbook.
-- **Fast search & filters**: search by part number, PO, supplier, or free-text remark; sort by price or date.
-- **Manual entries**: add transactions from the UI or `POST /api/parts`; they persist in `data/manual-entries.json`.
-- **Hot reload**: call `/api/reload` to re-parse spreadsheets without restarting the server.
-- **Docker + Procfile**: deploy to Docker hosts, Railway, Render, Fly.io, or any platform that runs Node 18+.
+- a local `workbooks/` folder
+- a Supabase Storage bucket
+
+It also stores manual entries in `data/manual-entries.json`.
+
+## What the app does
+
+- Parses supplier workbook data from the first sheet of each `.xlsx` file
+- Detects header rows even when column labels vary slightly
+- Extracts part number, PO, supplier, quantity, unit price, and total price
+- Skips adjustment-style rows such as exchange gain/loss entries
+- Displays records in a searchable, sortable single-page UI
+- Supports manual entry creation through the UI or API
+- Optionally exposes a shared folder link in the UI
+
+## Tech stack
+
+- Node.js
+- Express
+- SheetJS (`xlsx`)
+- Supabase Storage (optional)
+- Vanilla HTML, CSS, and JavaScript
 
 ## Prerequisites
 
-- Node.js 18+
-- npm 9+
-- At least one supplier workbook (`.xlsx`) copied into `workbooks/` (or wherever `WORKBOOKS_DIR` points).
+- Node.js 18 or newer
+- npm
+- Excel workbooks in `.xlsx` format if you are using local file ingestion
 
 ## Quick start
 
 ```bash
-# install dependencies once
 npm install
-
-# run the dev server (defaults to http://localhost:3000)
 npm start
 ```
 
-Environment variables:
+The server starts on `http://localhost:3000` by default.
+
+## Configuration
+
+SalesApp works in two ingestion modes:
+
+1. Local workbook mode
+2. Supabase Storage mode
+
+If Supabase credentials are present, the app reads workbooks from Supabase Storage. Otherwise it falls back to the local workbook directory.
+
+### Environment variables
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `3000` | HTTP port for the Express server |
-| `WORKBOOKS_DIR` | `<repo>/workbooks` | Directory containing `.xlsx` files to ingest |
-| `CORS_ALLOWED_ORIGINS` | `*` | Comma-delimited list of origins allowed to call the API |
+| `WORKBOOKS_DIR` | `workbooks` | Local directory for `.xlsx` files when Supabase is not configured |
+| `CORS_ALLOWED_ORIGINS` | not set | Comma-separated allowlist for cross-origin API requests |
+| `SHARED_FOLDER_URL` | empty | If set, shows an "Open Data Folder" button in the UI |
+| `SUPABASE_URL` | empty | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | empty | Service role key used to read from Storage |
+| `SUPABASE_BUCKET` | empty | Storage bucket containing Excel files |
 
-## Feeding Excel data
+### Local workbook mode
 
-1. Copy every supplier export (`.xlsx`) into `workbooks/`.
-2. Place the relevant data on the first sheet of each workbook (the parser reads sheet 0).
-3. Optional: rename files to make supplier identification easier (fallback is filename if headers are missing).
-4. Hit <http://localhost:3000/api/reload> or restart the server to re-parse once new files arrive.
+1. Put `.xlsx` files in `workbooks/`, or set `WORKBOOKS_DIR` to another folder.
+2. Start the server.
+3. Open `http://localhost:3000`.
+4. Call `GET /api/reload` after adding or changing workbooks.
 
-> **Note:** The original proprietary workbook is intentionally excluded from the repo. Add your own spreadsheets locally; Git ignores everything in `workbooks/` so private data stays off GitHub.
+Workbook files are ignored by Git through `.gitignore`.
 
-## Manual entries & API
+### Supabase Storage mode
 
-- Click **“➕ Add manual entry”** in the UI to log purchases without touching Excel. Required inputs: supplier, date, part number, quantity, and unit price. Optional: PO + remarks.
-- Data lands in `data/manual-entries.json` (gitignored). Persist that file/volume in production if you rely on manual entries.
-- Programmatic inserts:
+Set all three of these variables:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_BUCKET`
+
+When all three are present, the app lists `.xlsx` files from the configured bucket, downloads them in memory, and parses them at startup and on reload.
+
+## Expected workbook structure
+
+The parser scans for a header row and maps common aliases to these canonical fields:
+
+- `date`
+- `transactionType`
+- `po`
+- `product`
+- `memo`
+- `quantity`
+- `rate`
+- `amount`
+- `balance`
+
+The required fields for parsing are:
+
+- `date`
+- `product`
+- `memo`
+- `quantity`
+- `rate`
+- `amount`
+
+Part numbers are extracted primarily from:
+
+- `memo`
+- the trailing segment of `product` when it contains a colon
+- `product` directly when it already looks like a part number
+
+The app expects transaction dates in `DD/MM/YYYY` format inside workbook rows.
+
+## Manual entries
+
+Manual entries can be added from the web form or by calling the API directly.
+
+They are saved to:
+
+- `data/manual-entries.json`
+
+This file is not committed and should be persisted separately in production if you rely on manual data.
+
+Example request:
 
 ```bash
 curl -X POST http://localhost:3000/api/parts \
-  -H 'Content-Type: application/json' \
+  -H "Content-Type: application/json" \
   -d '{
     "supplier": "Arrow",
     "date": "2026-03-18",
@@ -64,20 +139,86 @@ curl -X POST http://localhost:3000/api/parts \
   }'
 ```
 
-Endpoints of note:
+## API
 
-| Endpoint | Method | Description |
-| --- | --- | --- |
-| `/api/parts` | GET | Full merged data set (workbooks + manual entries) |
-| `/api/parts` | POST | Insert a manual entry (same payload as UI) |
-| `/api/reload` | POST/GET | Re-parse every workbook and refresh cache |
+### `GET /health`
 
-## Deploying
+Returns service health plus whether Supabase mode is active.
+
+### `GET /api/parts`
+
+Returns the merged data set:
+
+- parsed workbook entries
+- manual entries
+
+Response shape:
+
+```json
+{
+  "total": 123,
+  "distinctParts": 45,
+  "data": []
+}
+```
+
+### `POST /api/parts`
+
+Creates a manual entry.
+
+Expected JSON body:
+
+```json
+{
+  "supplier": "Arrow",
+  "date": "2026-03-18",
+  "partNo": "10AS066H3F34I2SG",
+  "qty": 5,
+  "price": 725,
+  "po": "PO212445",
+  "remark": "Spare lot"
+}
+```
+
+### `GET /api/reload`
+
+Re-parses workbook data and refreshes the in-memory cache.
+
+## Frontend behavior
+
+The UI is served directly by the Express app from `public/`.
+
+It includes:
+
+- summary stats for record count, unique parts, and total spend
+- quick search by part number, PO, supplier, or remark
+- sort by date or unit price
+- detail panel for the selected record
+- manual entry form
+
+If you host the frontend separately, set:
+
+```html
+<script>
+  window.__SALESAPP_API__ = "https://your-api-domain.com";
+</script>
+```
+
+before loading `app.js`, and configure `CORS_ALLOWED_ORIGINS` on the backend.
+
+## Deployment
+
+This repository already includes deployment artifacts:
+
+- `Dockerfile`
+- `Procfile`
+- `render.yaml`
+- `DEPLOYMENT.md`
 
 ### Docker
 
 ```bash
-docker build -t sales-overview .
+docker build -t salesapp .
 
 docker run -it --rm \
   -p 3000:3000 \
@@ -85,35 +226,35 @@ docker run -it --rm \
   -e WORKBOOKS_DIR=/data/workbooks \
   -v "$(pwd)/workbooks:/data/workbooks" \
   -v "$(pwd)/data:/app/data" \
-  sales-overview
+  salesapp
 ```
 
-### Platform tips
+### Notes for production
 
-1. **Persist spreadsheets**: mount a volume or S3 bucket to `/data/workbooks` and set `WORKBOOKS_DIR=/data/workbooks`.
-2. **Persist manual entries**: mount `/app/data` (or store `data/manual-entries.json` elsewhere).
-3. **Front-end hosting** elsewhere? Expose the API URL via `<script>window.__SALESAPP_API__="https://api.example.com";</script>` before `app.js` and set `CORS_ALLOWED_ORIGINS` accordingly.
-4. **Zero-downtime reloads**: wire `/api/reload` to whatever automation drops fresh spreadsheets (Cron, GitHub Actions, etc.).
+- Persist the workbook source, whether that is a mounted local folder or Supabase Storage
+- Persist `data/manual-entries.json` if manual entries matter
+- Restrict `CORS_ALLOWED_ORIGINS` when the frontend is hosted on another domain
+- Call `GET /api/reload` after uploading new workbook files
 
 ## Repository layout
 
+```text
+salesapp-supabase/
+|-- data/                # runtime storage for manual entries
+|-- public/              # static frontend
+|-- workbooks/           # local Excel source directory
+|-- server.js            # Express server and workbook parsing logic
+|-- package.json         # dependencies and start script
+|-- Dockerfile           # container build
+|-- Procfile             # process entrypoint for compatible hosts
+|-- render.yaml          # Render service definition
+|-- DEPLOYMENT.md        # extra deployment notes
+`-- README.md
 ```
-SalesApp/
-├── data/                     # runtime storage (gitignored)
-├── public/                   # static assets (HTML/CSS/JS)
-├── workbooks/                # place private Excel exports here (gitignored)
-├── server.js                 # Express backend & ingestion logic
-├── package.json / lock       # dependencies (Express, SheetJS, etc.)
-├── Dockerfile                # container build
-├── Procfile                  # optional Heroku/Render entrypoint
-├── DEPLOYMENT.md             # extra hosting walkthroughs
-└── README.md                 # you are here
-```
 
-## Next steps
+## Development notes
 
-- Drop your spreadsheets into `workbooks/`, reload, and watch the dashboard repopulate.
-- Wire this repo to your hosting platform of choice (Docker, Railway, Render, Fly.io, etc.).
-- Extend `public/app.js` or `server.js` to track the metrics that matter most to your team.
-
-Happy selling! 📈
+- The app has no frontend build step
+- Static assets are served from `public/`
+- Workbook parsing happens at startup and on `GET /api/reload`
+- Search and sort are handled client-side after the initial data load
