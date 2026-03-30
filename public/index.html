@@ -7,6 +7,57 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <!-- Login Overlay -->
+    <div id="loginOverlay" class="login-overlay" hidden>
+      <div class="login-container">
+        <div class="login-header">
+          <p class="eyebrow">ADVINNO · SalesApp</p>
+          <h1>Sign In</h1>
+          <p class="subtitle">Enter your credentials to access the Parts Explorer.</p>
+        </div>
+
+        <div id="loginError" class="login-error" hidden></div>
+
+        <!-- Login Form -->
+        <form id="loginForm" class="login-form">
+          <label>
+            <span>Email</span>
+            <input type="email" id="loginEmail" required placeholder="you@company.com" autocomplete="email" />
+          </label>
+          <label>
+            <span>Password</span>
+            <input type="password" id="loginPassword" required placeholder="Your password" autocomplete="current-password" />
+          </label>
+          <button type="submit" class="primary-btn login-submit">Sign In</button>
+        </form>
+
+        <div class="login-divider">
+          <span>or</span>
+        </div>
+
+        <!-- Sign Up Form -->
+        <form id="signupForm" class="login-form" hidden>
+          <label>
+            <span>Email</span>
+            <input type="email" id="signupEmail" required placeholder="you@company.com" autocomplete="email" />
+          </label>
+          <label>
+            <span>Password</span>
+            <input type="password" id="signupPassword" required placeholder="At least 6 characters" autocomplete="new-password" minlength="6" />
+          </label>
+          <button type="submit" class="primary-btn login-submit">Create Account</button>
+        </form>
+
+        <div class="login-toggle">
+          <button type="button" id="toggleAuthMode" class="ghost-btn">Need an account? Sign up</button>
+        </div>
+
+        <div id="loginMessage" class="login-message" hidden></div>
+      </div>
+    </div>
+
+    <!-- Main App Content (hidden until authenticated) -->
+    <div id="appContent" class="app-content" hidden>
     <header class="page-header">
       <div>
         <p class="eyebrow">ADVINNO · SalesApp</p>
@@ -18,6 +69,10 @@
       </div>
       <div class="header-actions">
         <a id="openDataFolderBtn" class="action-btn" href="#" target="_blank" rel="noopener" style="display: none;">📂 Open Data Folder</a>
+        <div class="user-info" id="userInfo" style="display: none;">
+          <span class="user-email" id="userEmail"></span>
+          <button type="button" class="ghost-btn logout-btn" id="logoutBtn" onclick="logout()">Logout</button>
+        </div>
         <div class="stats" id="summaryStats">
           <div class="stat">
             <span class="label">Records</span>
@@ -129,6 +184,8 @@
         <p class="remark"></p>
       </article>
     </template>
+
+    </div>
 
     <script src="app.js" type="module"></script>
   </body>

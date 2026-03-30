@@ -1,3 +1,227 @@
+// Supabase Auth Configuration
+const SUPABASE_URL = window.__SUPABASE_URL__ || '';
+const SUPABASE_ANON_KEY = window.__SUPABASE_ANON_KEY__ || '';
+const AUTH_ENABLED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+// Initialize Supabase client for auth
+let supabaseAuth = null;
+let currentUser = null;
+
+if (AUTH_ENABLED) {
+  // Dynamically load Supabase JS client
+  supabaseAuth = window.supabase
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : null;
+}
+
+// DOM Elements for Auth
+const loginOverlay = document.getElementById('loginOverlay');
+const appContent = document.getElementById('appContent');
+const loginForm = document.getElementById('loginForm');
+const signupForm = document.getElementById('signupForm');
+const loginError = document.getElementById('loginError');
+const loginMessage = document.getElementById('loginMessage');
+const toggleAuthModeBtn = document.getElementById('toggleAuthMode');
+const userInfo = document.getElementById('userInfo');
+const userEmail = document.getElementById('userEmail');
+
+// State for auth mode toggle
+let isLoginMode = true;
+
+// Check authentication state on load
+async function checkAuth() {
+  if (!AUTH_ENABLED) {
+    // No auth configured, show app directly
+    showApp();
+    return;
+  }
+
+  if (!supabaseAuth) {
+    // Supabase client not loaded, try loading it
+    await loadSupabaseClient();
+    if (!supabaseAuth) {
+      console.warn('Supabase client could not be loaded. Showing app without auth.');
+      showApp();
+      return;
+    }
+  }
+
+  // Check for existing session
+  const { data: { session }, error } = await supabaseAuth.auth.getSession();
+
+  if (session) {
+    currentUser = session.user;
+    showApp();
+  } else {
+    showLogin();
+  }
+
+  // Listen for auth state changes
+  supabaseAuth.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      currentUser = session.user;
+      showApp();
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null;
+      showLogin();
+    }
+  });
+}
+
+async function loadSupabaseClient() {
+  if (window.supabase) {
+    supabaseAuth = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    return;
+  }
+
+  // Load Supabase from CDN
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+    script.onload = () => {
+      if (window.supabase) {
+        supabaseAuth = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        resolve();
+      } else {
+        reject(new Error('Supabase client not available after loading'));
+      }
+    };
+    script.onerror = () => reject(new Error('Failed to load Supabase client'));
+    document.head.appendChild(script);
+  });
+}
+
+function showLogin() {
+  loginOverlay.hidden = false;
+  appContent.hidden = true;
+}
+
+function showApp() {
+  loginOverlay.hidden = true;
+  appContent.hidden = false;
+
+  // Show user info if authenticated
+  if (currentUser && userInfo) {
+    userInfo.style.display = 'flex';
+    userEmail.textContent = currentUser.email || 'User';
+  }
+
+  // Load data only when app is shown
+  if (!window.__dataLoaded) {
+    loadData();
+    window.__dataLoaded = true;
+  }
+}
+
+function showError(message) {
+  loginError.textContent = message;
+  loginError.hidden = false;
+  setTimeout(() => { loginError.hidden = true; }, 5000);
+}
+
+function showMessage(message) {
+  loginMessage.textContent = message;
+  loginMessage.hidden = false;
+  setTimeout(() => { loginMessage.hidden = true; }, 5000);
+}
+
+// Handle login
+async function handleLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+
+  if (!supabaseAuth) {
+    showError('Authentication is not configured');
+    return;
+  }
+
+  try {
+    const { data, error } = await supabaseAuth.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) {
+      showError(error.message);
+      return;
+    }
+
+    if (data.user) {
+      currentUser = data.user;
+      showApp();
+    }
+  } catch (err) {
+    showError('An unexpected error occurred');
+  }
+}
+
+// Handle signup
+async function handleSignup(e) {
+  e.preventDefault();
+  const email = document.getElementById('signupEmail').value.trim();
+  const password = document.getElementById('signupPassword').value;
+
+  if (!supabaseAuth) {
+    showError('Authentication is not configured');
+    return;
+  }
+
+  try {
+    const { data, error } = await supabaseAuth.auth.signUp({
+      email,
+      password
+    });
+
+    if (error) {
+      showError(error.message);
+      return;
+    }
+
+    showMessage('Account created! Please check your email to confirm your account.');
+    // Switch back to login mode
+    isLoginMode = true;
+    toggleAuthMode();
+    signupForm.reset();
+  } catch (err) {
+    showError('An unexpected error occurred');
+  }
+}
+
+// Toggle between login and signup
+function toggleAuthMode() {
+  isLoginMode = !isLoginMode;
+  if (isLoginMode) {
+    loginForm.hidden = false;
+    signupForm.hidden = true;
+    toggleAuthModeBtn.textContent = 'Need an account? Sign up';
+  } else {
+    loginForm.hidden = true;
+    signupForm.hidden = false;
+    toggleAuthModeBtn.textContent = 'Already have an account? Sign in';
+  }
+  loginError.hidden = true;
+  loginMessage.hidden = true;
+}
+
+// Logout function (accessible globally)
+async function logout() {
+  if (supabaseAuth) {
+    await supabaseAuth.auth.signOut();
+  }
+  currentUser = null;
+  showLogin();
+}
+
+// Event listeners for auth
+loginForm.addEventListener('submit', handleLogin);
+signupForm.addEventListener('submit', handleSignup);
+toggleAuthModeBtn.addEventListener('click', toggleAuthMode);
+
+// ==========================================
+// MAIN APP LOGIC (unchanged from original)
+// ==========================================
+
 const state = {
   raw: [],
   filtered: [],
@@ -253,11 +477,9 @@ if (cancelEntryBtn) {
 
 entryForm.addEventListener('submit', handleEntrySubmit);
 
-loadData().catch((error) => {
-  detailEl.innerHTML = `
-    <div class="placeholder">
-      <h2>Unable to load data</h2>
-      <p>${error.message}</p>
-    </div>
-  `;
+// Initialize auth check
+checkAuth().catch((error) => {
+  console.error('Auth initialization error:', error);
+  // Show app even on auth error
+  showApp();
 });

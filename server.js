@@ -26,8 +26,10 @@ const SHARED_FOLDER_URL = process.env.SHARED_FOLDER_URL || '';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
 const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || '';
 const USE_SUPABASE = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && SUPABASE_BUCKET);
+const USE_AUTH = Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY));
 
 const PART_PATTERN = /^[A-Za-z0-9\-]+$/;
 const REQUIRED_FIELDS = ['date', 'product', 'memo', 'quantity', 'rate', 'amount'];
@@ -532,18 +534,27 @@ app.get('/api/reload', async (req, res) => {
   }
 });
 
-app.use((req, res) => {                                                                                              
-     const indexPath = path.join(__dirname, 'public', 'index.html');                                                    
-     fs.readFile(indexPath, 'utf8', (err, html) => {                                                                    
-       if (err) {                                                                                                       
-         console.error('Failed to read index.html:', err);                                                              
-         return res.status(500).send('Error loading page');                                                             
-       }                                                                                                                
-       const injection = `\n<script>window.__SHARED_FOLDER_URL__ = ${JSON.stringify(SHARED_FOLDER_URL)};</script>\n`;   
-       const modifiedHtml = html.replace('</body>', `${injection}</body>`);                                             
-       res.send(modifiedHtml);                                                                                          
-     });                                                                                                                
-   });   
+app.use((req, res) => {
+     const indexPath = path.join(__dirname, 'public', 'index.html');
+     fs.readFile(indexPath, 'utf8', (err, html) => {
+       if (err) {
+         console.error('Failed to read index.html:', err);
+         return res.status(500).send('Error loading page');
+       }
+
+       // Inject environment variables for frontend
+       const sharedFolderInjection = `\n<script>window.__SHARED_FOLDER_URL__ = ${JSON.stringify(SHARED_FOLDER_URL)};</script>\n`;
+
+       // Inject Supabase auth config for frontend
+       const authConfigInjection = USE_AUTH
+         ? `\n<script>window.__SUPABASE_URL__ = ${JSON.stringify(SUPABASE_URL)}; window.__SUPABASE_ANON_KEY__ = ${JSON.stringify(SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY)};</script>\n`
+         : '';
+
+       const modifiedHtml = html
+         .replace('</body>', `${sharedFolderInjection}${authConfigInjection}</body>`);
+       res.send(modifiedHtml);
+     });
+   });
 
 initializeWorkbooks().catch(console.error);
 
