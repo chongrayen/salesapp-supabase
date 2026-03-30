@@ -411,6 +411,15 @@ body {
   padding: 1rem;
 }
 
+/* Ensure hidden attribute works properly */
+.login-overlay[hidden] {
+  display: none !important;
+}
+
+.app-content[hidden] {
+  display: none !important;
+}
+
 .login-container {
   background: var(--panel);
   border: 1px solid var(--border);

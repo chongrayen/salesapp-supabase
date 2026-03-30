@@ -110,22 +110,34 @@ async function checkAuth() {
 }
 
 function showLogin() {
-  loginOverlay.hidden = false;
-  appContent.hidden = true;
+  if (loginOverlay) loginOverlay.hidden = false;
+  if (appContent) appContent.hidden = true;
+  console.log('Showing login screen');
 }
 
 function showApp() {
-  loginOverlay.hidden = true;
-  appContent.hidden = false;
+  console.log('showApp called, currentUser:', currentUser ? currentUser.email : 'null');
+  
+  if (loginOverlay) {
+    loginOverlay.hidden = true;
+    console.log('Login overlay hidden');
+  }
+  
+  if (appContent) {
+    appContent.hidden = false;
+    console.log('App content shown');
+  }
 
   // Show user info if authenticated
   if (currentUser && userInfo) {
     userInfo.style.display = 'flex';
     userEmail.textContent = currentUser.email || 'User';
+    console.log('User info displayed:', currentUser.email);
   }
 
   // Load data only when app is shown
   if (!window.__dataLoaded) {
+    console.log('Loading data for first time');
     loadData();
     window.__dataLoaded = true;
   }
