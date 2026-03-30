@@ -481,13 +481,15 @@ body {
   background: var(--border);
 }
 
-.login-toggle {
+.login-footer {
+  margin-top: 1.25rem;
   text-align: center;
-  margin-top: 0.5rem;
 }
 
-.login-toggle .ghost-btn {
-  font-size: 0.9rem;
+.login-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0;
 }
 
 .login-error {

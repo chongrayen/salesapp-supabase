@@ -18,15 +18,10 @@ if (AUTH_ENABLED) {
 const loginOverlay = document.getElementById('loginOverlay');
 const appContent = document.getElementById('appContent');
 const loginForm = document.getElementById('loginForm');
-const signupForm = document.getElementById('signupForm');
 const loginError = document.getElementById('loginError');
 const loginMessage = document.getElementById('loginMessage');
-const toggleAuthModeBtn = document.getElementById('toggleAuthMode');
 const userInfo = document.getElementById('userInfo');
 const userEmail = document.getElementById('userEmail');
-
-// State for auth mode toggle
-let isLoginMode = true;
 
 // Check authentication state on load
 async function checkAuth() {
@@ -156,54 +151,6 @@ async function handleLogin(e) {
   }
 }
 
-// Handle signup
-async function handleSignup(e) {
-  e.preventDefault();
-  const email = document.getElementById('signupEmail').value.trim();
-  const password = document.getElementById('signupPassword').value;
-
-  if (!supabaseAuth) {
-    showError('Authentication is not configured');
-    return;
-  }
-
-  try {
-    const { data, error } = await supabaseAuth.auth.signUp({
-      email,
-      password
-    });
-
-    if (error) {
-      showError(error.message);
-      return;
-    }
-
-    showMessage('Account created! Please check your email to confirm your account.');
-    // Switch back to login mode
-    isLoginMode = true;
-    toggleAuthMode();
-    signupForm.reset();
-  } catch (err) {
-    showError('An unexpected error occurred');
-  }
-}
-
-// Toggle between login and signup
-function toggleAuthMode() {
-  isLoginMode = !isLoginMode;
-  if (isLoginMode) {
-    loginForm.hidden = false;
-    signupForm.hidden = true;
-    toggleAuthModeBtn.textContent = 'Need an account? Sign up';
-  } else {
-    loginForm.hidden = true;
-    signupForm.hidden = false;
-    toggleAuthModeBtn.textContent = 'Already have an account? Sign in';
-  }
-  loginError.hidden = true;
-  loginMessage.hidden = true;
-}
-
 // Logout function (accessible globally)
 async function logout() {
   if (supabaseAuth) {
@@ -215,8 +162,6 @@ async function logout() {
 
 // Event listeners for auth
 loginForm.addEventListener('submit', handleLogin);
-signupForm.addEventListener('submit', handleSignup);
-toggleAuthModeBtn.addEventListener('click', toggleAuthMode);
 
 // ==========================================
 // MAIN APP LOGIC (unchanged from original)
