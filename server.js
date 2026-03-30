@@ -7,7 +7,8 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
-const MANUAL_STORE = path.join(DATA_DIR, 'manual-entries.json');
+const MANUAL_STORE_JSON = path.join(DATA_DIR, 'manual-entries.json');
+const MANUAL_STORE_XLSX = path.join(DATA_DIR, 'manual-entries.xlsx');
 const DEFAULT_WORKBOOK_DIR = path.join(__dirname, 'workbooks');
 const WORKBOOKS_DIR = (() => {
   const customPath = process.env.WORKBOOKS_DIR;
@@ -186,27 +187,236 @@ function ensureWorkbookDir() {
   }
 }
 
-function loadManualEntries() {
-  ensureDataDir();
-  if (!fs.existsSync(MANUAL_STORE)) {
-    fs.writeFileSync(MANUAL_STORE, JSON.stringify([]));
-    return [];
-  }
+// Excel column headers for manual entries
+const MANUAL_ENTRY_HEADERS = [
+  'Transaction Date',
+  'Transaction Type',
+  'PO Number',
+  'Product/Service Full Name',
+  'Memo/Description',
+  'Quantity',
+  'Rate',
+  'Amount',
+  'Supplier',
+  'Source'
+];
 
+function parseManualEntriesFromData(data) {
+  // Skip header row and convert to entry objects
+  const entries = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row.length === 0 || !row[0]) continue; // Skip empty rows
+    
+    const entry = {
+      id: `manual-${i}-${Date.now()}`,
+      dateRaw: row[0] || '',
+      date: formatDate(row[0] || ''),
+      transactionType: (row[1] || 'MANUAL').toUpperCase(),
+      po: row[2] || '',
+      product: row[3] || '',
+      memo: row[4] || '',
+      qty: Number(row[5]) || 0,
+      price: Number(row[6]) || 0,
+      totalPrice: Number(row[7]) || 0,
+      supplier: row[8] || 'Manual entry',
+      source: 'manual'
+    };
+    
+    // Validate entry has minimum required data
+    if (entry.dateRaw && entry.product && entry.qty > 0 && entry.price > 0) {
+      entries.push(entry);
+    }
+  }
+  
+  return entries;
+}
+
+function loadManualEntriesFromLocalFile() {
+  ensureDataDir();
+  
+  // Try loading from Excel first, then fall back to JSON
+  if (fs.existsSync(MANUAL_STORE_XLSX)) {
+    try {
+      const workbook = XLSX.readFile(MANUAL_STORE_XLSX);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+      const entries = parseManualEntriesFromData(data);
+      console.log(`Loaded ${entries.length} manual entries from local Excel`);
+      return entries;
+    } catch (error) {
+      console.error('Error loading manual entries from local Excel:', error.message);
+    }
+  }
+  
+  // Fall back to JSON if Excel doesn't exist or failed to load
+  if (fs.existsSync(MANUAL_STORE_JSON)) {
+    try {
+      const content = fs.readFileSync(MANUAL_STORE_JSON, 'utf-8');
+      const parsed = JSON.parse(content);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.error('Unable to read manual entries JSON. Resetting.', error);
+    }
+  }
+  
+  return [];
+}
+
+async function loadManualEntriesFromSupabase() {
+  if (!supabase) {
+    return null;
+  }
+  
   try {
-    const content = fs.readFileSync(MANUAL_STORE, 'utf-8');
-    const parsed = JSON.parse(content);
-    return Array.isArray(parsed) ? parsed : [];
+    const { data, error } = await supabase.storage
+      .from(SUPABASE_BUCKET)
+      .download('manual-entries.xlsx');
+    
+    if (error) {
+      // File might not exist yet
+      if (error.message.includes('The resource was not found')) {
+        return null;
+      }
+      console.error('Error downloading manual entries from Supabase:', error.message);
+      return null;
+    }
+    
+    if (!data) {
+      return null;
+    }
+    
+    const arrayBuffer = await data.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const excelData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+    const entries = parseManualEntriesFromData(excelData);
+    console.log(`Loaded ${entries.length} manual entries from Supabase`);
+    return entries;
   } catch (error) {
-    console.error('Unable to read manual entries. Resetting file.', error);
-    fs.writeFileSync(MANUAL_STORE, JSON.stringify([]));
-    return [];
+    console.error('Error loading manual entries from Supabase:', error.message);
+    return null;
+  }
+}
+
+async function loadManualEntries() {
+  // If Supabase is configured, try loading from there first
+  if (USE_SUPABASE) {
+    const supabaseEntries = await loadManualEntriesFromSupabase();
+    if (supabaseEntries && supabaseEntries.length > 0) {
+      // Also save locally for faster subsequent loads
+      saveManualEntriesToLocalFile(supabaseEntries);
+      return supabaseEntries;
+    }
+  }
+  
+  // Fall back to local file
+  return loadManualEntriesFromLocalFile();
+}
+
+function saveManualEntriesToLocalFile(entries) {
+  ensureDataDir();
+  
+  // Convert entries to Excel format
+  const rows = [MANUAL_ENTRY_HEADERS]; // Header row
+  
+  entries.forEach((entry, index) => {
+    rows.push([
+      entry.dateRaw || '',
+      entry.transactionType || 'MANUAL',
+      entry.po || '',
+      entry.product || '',
+      entry.remark || entry.memo || '',
+      entry.qty || 0,
+      entry.price || 0,
+      entry.totalPrice || 0,
+      entry.supplier || 'Manual entry',
+      entry.source || 'manual'
+    ]);
+  });
+  
+  // Create workbook and write to file
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Manual Entries');
+  XLSX.writeFile(workbook, MANUAL_STORE_XLSX);
+  
+  console.log(`Saved ${entries.length} manual entries to local Excel`);
+  
+  // Also save JSON backup for compatibility
+  try {
+    fs.writeFileSync(MANUAL_STORE_JSON, JSON.stringify(entries, null, 2));
+  } catch (error) {
+    console.error('Warning: Could not save JSON backup:', error.message);
+  }
+}
+
+async function saveManualEntriesToSupabase(entries) {
+  if (!supabase) {
+    console.error('Cannot save to Supabase: not configured');
+    return false;
+  }
+  
+  try {
+    // Convert entries to Excel format
+    const rows = [MANUAL_ENTRY_HEADERS]; // Header row
+    
+    entries.forEach((entry, index) => {
+      rows.push([
+        entry.dateRaw || '',
+        entry.transactionType || 'MANUAL',
+        entry.po || '',
+        entry.product || '',
+        entry.remark || entry.memo || '',
+        entry.qty || 0,
+        entry.price || 0,
+        entry.totalPrice || 0,
+        entry.supplier || 'Manual entry',
+        entry.source || 'manual'
+      ]);
+    });
+    
+    // Create workbook in memory
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Manual Entries');
+    
+    // Convert to buffer
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    
+    // Upload to Supabase storage
+    const fileName = 'manual-entries.xlsx';
+    const { data, error } = await supabase.storage
+      .from(SUPABASE_BUCKET)
+      .upload(fileName, buffer, {
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        upsert: true // Overwrite if exists
+      });
+    
+    if (error) {
+      console.error('Failed to upload manual entries to Supabase:', error.message);
+      return false;
+    }
+    
+    console.log(`Saved ${entries.length} manual entries to Supabase bucket`);
+    return true;
+  } catch (error) {
+    console.error('Error saving to Supabase:', error.message);
+    return false;
   }
 }
 
 function saveManualEntries(entries) {
-  ensureDataDir();
-  fs.writeFileSync(MANUAL_STORE, JSON.stringify(entries, null, 2));
+  // Save to local file
+  saveManualEntriesToLocalFile(entries);
+  
+  // Try to save to Supabase if configured
+  if (USE_SUPABASE) {
+    saveManualEntriesToSupabase(entries).catch(err => {
+      console.error('Failed to save to Supabase:', err.message);
+    });
+  }
 }
 
 function deriveSupplierFromFilename(filePath) {
