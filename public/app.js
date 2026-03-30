@@ -6,13 +6,8 @@ const AUTH_ENABLED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 // Initialize Supabase client for auth
 let supabaseAuth = null;
 let currentUser = null;
-
-if (AUTH_ENABLED) {
-  // Dynamically load Supabase JS client
-  supabaseAuth = window.supabase
-    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-    : null;
-}
+let authInitialized = false;
+let authInitializing = false;
 
 // DOM Elements for Auth
 const loginOverlay = document.getElementById('loginOverlay');
@@ -23,50 +18,20 @@ const loginMessage = document.getElementById('loginMessage');
 const userInfo = document.getElementById('userInfo');
 const userEmail = document.getElementById('userEmail');
 
-// Check authentication state on load
-async function checkAuth() {
+// Get or initialize Supabase client
+async function getSupabaseClient() {
   if (!AUTH_ENABLED) {
-    // No auth configured, show app directly
-    showApp();
-    return;
+    return null;
   }
 
-  if (!supabaseAuth) {
-    // Supabase client not loaded, try loading it
-    await loadSupabaseClient();
-    if (!supabaseAuth) {
-      console.warn('Supabase client could not be loaded. Showing app without auth.');
-      showApp();
-      return;
-    }
+  if (supabaseAuth) {
+    return supabaseAuth;
   }
 
-  // Check for existing session
-  const { data: { session }, error } = await supabaseAuth.auth.getSession();
-
-  if (session) {
-    currentUser = session.user;
-    showApp();
-  } else {
-    showLogin();
-  }
-
-  // Listen for auth state changes
-  supabaseAuth.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' && session) {
-      currentUser = session.user;
-      showApp();
-    } else if (event === 'SIGNED_OUT') {
-      currentUser = null;
-      showLogin();
-    }
-  });
-}
-
-async function loadSupabaseClient() {
+  // Check if Supabase is already loaded
   if (window.supabase) {
     supabaseAuth = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    return;
+    return supabaseAuth;
   }
 
   // Load Supabase from CDN
@@ -76,14 +41,72 @@ async function loadSupabaseClient() {
     script.onload = () => {
       if (window.supabase) {
         supabaseAuth = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        resolve();
+        resolve(supabaseAuth);
       } else {
         reject(new Error('Supabase client not available after loading'));
       }
     };
-    script.onerror = () => reject(new Error('Failed to load Supabase client'));
+    script.onerror = () => reject(new Error('Failed to load Supabase client from CDN'));
     document.head.appendChild(script);
   });
+}
+
+// Check authentication state on load
+async function checkAuth() {
+  if (!AUTH_ENABLED) {
+    // No auth configured, show app directly
+    console.log('Auth not enabled, showing app');
+    showApp();
+    return;
+  }
+
+  try {
+    supabaseAuth = await getSupabaseClient();
+  } catch (error) {
+    console.error('Failed to initialize Supabase client:', error);
+    console.warn('Showing app without auth due to client initialization failure');
+    showApp();
+    return;
+  }
+
+  if (!supabaseAuth) {
+    console.warn('Supabase client is null, showing app without auth');
+    showApp();
+    return;
+  }
+
+  // Check for existing session
+  try {
+    const { data: { session }, error } = await supabaseAuth.auth.getSession();
+
+    if (error) {
+      console.error('Error getting session:', error);
+    }
+
+    if (session) {
+      currentUser = session.user;
+      console.log('User logged in:', currentUser.email);
+      showApp();
+    } else {
+      console.log('No active session, showing login');
+      showLogin();
+    }
+
+    // Listen for auth state changes
+    supabaseAuth.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event);
+      if (event === 'SIGNED_IN' && session) {
+        currentUser = session.user;
+        showApp();
+      } else if (event === 'SIGNED_OUT') {
+        currentUser = null;
+        showLogin();
+      }
+    });
+  } catch (error) {
+    console.error('Error during auth check:', error);
+    showApp();
+  }
 }
 
 function showLogin() {
@@ -109,6 +132,7 @@ function showApp() {
 }
 
 function showError(message) {
+  console.error('Login error:', message);
   loginError.textContent = message;
   loginError.hidden = false;
   setTimeout(() => { loginError.hidden = true; }, 5000);
@@ -123,13 +147,35 @@ function showMessage(message) {
 // Handle login
 async function handleLogin(e) {
   e.preventDefault();
+  
+  console.log('Login attempt started');
+  
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
 
-  if (!supabaseAuth) {
-    showError('Authentication is not configured');
+  if (!email || !password) {
+    showError('Please enter both email and password');
     return;
   }
+
+  if (!AUTH_ENABLED) {
+    showError('Authentication is not configured. Please contact the administrator.');
+    return;
+  }
+
+  // Ensure we have a Supabase client
+  if (!supabaseAuth) {
+    console.log('Supabase client not ready, initializing...');
+    try {
+      supabaseAuth = await getSupabaseClient();
+    } catch (error) {
+      console.error('Failed to get Supabase client:', error);
+      showError('Authentication service is unavailable. Please try again later.');
+      return;
+    }
+  }
+
+  console.log('Signing in with email:', email);
 
   try {
     const { data, error } = await supabaseAuth.auth.signInWithPassword({
@@ -138,23 +184,33 @@ async function handleLogin(e) {
     });
 
     if (error) {
-      showError(error.message);
+      console.error('Login error:', error);
+      showError(error.message || 'Invalid login credentials');
       return;
     }
 
     if (data.user) {
+      console.log('Login successful:', data.user.email);
       currentUser = data.user;
       showApp();
+    } else {
+      showError('Login failed: no user data received');
     }
   } catch (err) {
-    showError('An unexpected error occurred');
+    console.error('Unexpected error during login:', err);
+    showError('An unexpected error occurred. Please try again.');
   }
 }
 
 // Logout function (accessible globally)
 async function logout() {
+  console.log('Logout requested');
   if (supabaseAuth) {
-    await supabaseAuth.auth.signOut();
+    try {
+      await supabaseAuth.auth.signOut();
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
   }
   currentUser = null;
   showLogin();
@@ -162,6 +218,9 @@ async function logout() {
 
 // Event listeners for auth
 loginForm.addEventListener('submit', handleLogin);
+
+// Make logout available globally
+window.logout = logout;
 
 // ==========================================
 // MAIN APP LOGIC (unchanged from original)

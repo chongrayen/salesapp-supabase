@@ -95,6 +95,14 @@ Users can reset their own passwords by clicking "Forgot password?" on the login 
 
 ## Troubleshooting
 
+### Login button does nothing / No response
+1. **Open browser developer console** (F12 or right-click → Inspect → Console)
+2. **Check for errors** - Look for any red error messages
+3. **Check if Supabase is configured**:
+   - Type `window.__SUPABASE_URL__` in console - should show your Supabase URL
+   - Type `window.__SUPABASE_ANON_KEY__` - should show your anon key
+   - If these are empty, the environment variables are not set correctly in Render
+
 ### Login not working / App shows without login
 - Check that `SUPABASE_URL` and `SUPABASE_ANON_KEY` are correctly set in Render
 - Verify your Supabase project URL is correct (should end with `.supabase.co`)
