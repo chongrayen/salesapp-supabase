@@ -667,11 +667,16 @@ function buildManualEntry(payload) {
 }
 
 let excelEntries = [];
-let manualEntries = sortEntries(loadManualEntries());
+let manualEntries = [];
 let cachedEntries = combineEntries(excelEntries, manualEntries);
 
 async function initializeWorkbooks() {
   try {
+    // Load manual entries (async for Supabase)
+    manualEntries = sortEntries(await loadManualEntries());
+    console.log(`Loaded ${manualEntries.length} manual entries`);
+    
+    // Load workbook entries
     excelEntries = await parseAllWorkbooks();
     refreshCache();
     console.log(`Loaded ${excelEntries.length} workbook entries`);
