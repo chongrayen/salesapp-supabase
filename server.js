@@ -212,30 +212,57 @@ function parseManualEntriesFromData(data) {
     const hasAnyData = row.some(cell => cell !== '' && cell !== null && cell !== undefined);
     if (!hasAnyData) continue;
     
-    const dateRaw = row[0] || '';
-    const product = row[3] || '';
-    const qty = Number(row[5]) || 0;
-    const price = Number(row[6]) || 0;
+    // Parse and validate date - use fallback if missing or invalid
+    let dateRaw = row[0] || '';
+    if (!dateRaw) {
+      dateRaw = '01/01/2000'; // Default date for incomplete entries
+    }
+    
+    // Parse product name with fallbacks
+    let product = row[3] || '';
+    if (!product) {
+      product = row[4] || row[8] || 'Unknown Product';
+    }
+    
+    // Parse quantity with fallback
+    let qty = Number(row[5]);
+    if (!qty || isNaN(qty) || qty <= 0) {
+      qty = 0; // Will be marked as needing attention
+    }
+    
+    // Parse price/rate with fallback
+    let price = Number(row[6]);
+    if (!price || isNaN(price) || price <= 0) {
+      price = 0; // Will be marked as needing attention
+    }
+    
+    // Parse total price with fallback
+    let totalPrice = Number(row[7]);
+    if (!totalPrice || isNaN(totalPrice)) {
+      totalPrice = qty * price; // Calculate if missing
+      if (!totalPrice || totalPrice === 0) {
+        totalPrice = 0; // Still zero, needs attention
+      }
+    }
     
     const entry = {
       id: `manual-${i}-${Date.now()}`,
       dateRaw: dateRaw,
       date: formatDate(dateRaw),
       transactionType: (row[1] || 'MANUAL').toUpperCase(),
-      po: row[2] || '',
+      po: row[2] || 'To be filled',
       product: product,
-      memo: row[4] || '',
+      memo: row[4] || 'To be filled',
       qty: qty,
       price: price,
-      totalPrice: Number(row[7]) || 0,
-      supplier: row[8] || 'Manual entry',
-      source: 'manual'
+      totalPrice: totalPrice,
+      supplier: row[8] || 'Unknown Supplier',
+      source: 'manual',
+      needsReview: !dateRaw || dateRaw === '01/01/2000' || !product || product === 'Unknown Product' || qty === 0 || price === 0
     };
     
-    // More lenient validation - just need date and product
-    if (dateRaw && product) {
-      entries.push(entry);
-    }
+    // Always include the entry, even if incomplete
+    entries.push(entry);
   }
   
   return entries;
