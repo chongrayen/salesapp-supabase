@@ -265,8 +265,11 @@ function loadManualEntriesFromLocalFile() {
 
 async function loadManualEntriesFromSupabase() {
   if (!supabase) {
+    console.log('Supabase client not available for loading manual entries');
     return null;
   }
+  
+  console.log(`Attempting to load manual-entries.xlsx from bucket: ${SUPABASE_BUCKET}`);
   
   try {
     const { data, error } = await supabase.storage
@@ -275,7 +278,8 @@ async function loadManualEntriesFromSupabase() {
     
     if (error) {
       // File might not exist yet
-      if (error.message.includes('The resource was not found')) {
+      if (error.message.includes('The resource was not found') || error.message.includes('not found')) {
+        console.log('manual-entries.xlsx not found in Supabase bucket (this is normal for first run)');
         return null;
       }
       console.error('Error downloading manual entries from Supabase:', error.message);
@@ -283,19 +287,44 @@ async function loadManualEntriesFromSupabase() {
     }
     
     if (!data) {
+      console.log('No data returned from Supabase download');
       return null;
     }
     
-    const arrayBuffer = await data.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const excelData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-    const entries = parseManualEntriesFromData(excelData);
-    console.log(`Loaded ${entries.length} manual entries from Supabase`);
-    return entries;
+    console.log('Downloaded manual-entries.xlsx from Supabase, size:', data.size || 'unknown');
+    
+    try {
+      const arrayBuffer = await data.arrayBuffer();
+      console.log('ArrayBuffer size:', arrayBuffer.byteLength);
+      
+      const buffer = Buffer.from(arrayBuffer);
+      console.log('Buffer created, length:', buffer.length);
+      
+      const workbook = XLSX.read(buffer, { type: 'buffer' });
+      console.log('Workbook sheets:', workbook.SheetNames);
+      
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const excelData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+      console.log('Excel data rows (including header):', excelData.length);
+      console.log('Header row:', excelData[0]);
+      console.log('First data row:', excelData[1]);
+      
+      const entries = parseManualEntriesFromData(excelData);
+      console.log(`Parsed ${entries.length} valid manual entries from Supabase`);
+      
+      if (entries.length > 0) {
+        console.log('Sample entry:', JSON.stringify(entries[0], null, 2));
+      }
+      
+      return entries;
+    } catch (parseError) {
+      console.error('Error parsing Excel file from Supabase:', parseError.message);
+      console.error('Parse error stack:', parseError.stack);
+      return null;
+    }
   } catch (error) {
     console.error('Error loading manual entries from Supabase:', error.message);
+    console.error('Load error stack:', error.stack);
     return null;
   }
 }
