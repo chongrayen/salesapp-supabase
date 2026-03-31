@@ -206,25 +206,34 @@ function parseManualEntriesFromData(data) {
   const entries = [];
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    if (row.length === 0 || !row[0]) continue; // Skip empty rows
+    if (row.length === 0) continue; // Skip completely empty rows
+    
+    // Check if at least some data exists (not just empty strings)
+    const hasAnyData = row.some(cell => cell !== '' && cell !== null && cell !== undefined);
+    if (!hasAnyData) continue;
+    
+    const dateRaw = row[0] || '';
+    const product = row[3] || '';
+    const qty = Number(row[5]) || 0;
+    const price = Number(row[6]) || 0;
     
     const entry = {
       id: `manual-${i}-${Date.now()}`,
-      dateRaw: row[0] || '',
-      date: formatDate(row[0] || ''),
+      dateRaw: dateRaw,
+      date: formatDate(dateRaw),
       transactionType: (row[1] || 'MANUAL').toUpperCase(),
       po: row[2] || '',
-      product: row[3] || '',
+      product: product,
       memo: row[4] || '',
-      qty: Number(row[5]) || 0,
-      price: Number(row[6]) || 0,
+      qty: qty,
+      price: price,
       totalPrice: Number(row[7]) || 0,
       supplier: row[8] || 'Manual entry',
       source: 'manual'
     };
     
-    // Validate entry has minimum required data
-    if (entry.dateRaw && entry.product && entry.qty > 0 && entry.price > 0) {
+    // More lenient validation - just need date and product
+    if (dateRaw && product) {
       entries.push(entry);
     }
   }
