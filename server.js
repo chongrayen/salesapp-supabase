@@ -32,6 +32,12 @@ const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || '';
 const USE_SUPABASE = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && SUPABASE_BUCKET);
 const USE_AUTH = Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY));
 
+console.log('=== Configuration ===');
+console.log('SUPABASE_URL:', SUPABASE_URL || 'NOT SET');
+console.log('SUPABASE_BUCKET:', SUPABASE_BUCKET || 'NOT SET');
+console.log('USE_SUPABASE:', USE_SUPABASE);
+console.log('======================');
+
 const PART_PATTERN = /^[A-Za-z0-9\-]+$/;
 const REQUIRED_FIELDS = ['date', 'product', 'memo', 'quantity', 'rate', 'amount'];
 const COLUMN_ALIASES = {
@@ -493,6 +499,8 @@ function deriveSupplierFromFilename(filePath) {
 }
 
 async function listSupabaseExcelFiles() {
+  console.log(`Listing files in Supabase bucket: ${SUPABASE_BUCKET}`);
+  
   const { data, error } = await supabase.storage.from(SUPABASE_BUCKET).list('', {
     limit: 1000,
     offset: 0,
@@ -500,18 +508,25 @@ async function listSupabaseExcelFiles() {
   });
 
   if (error) {
+    console.error('Error listing files from Supabase:', error);
     throw error;
   }
 
-  return (data || []).filter((item) => item.name && item.name.toLowerCase().endsWith('.xlsx'));
+  const excelFiles = (data || []).filter((item) => item.name && item.name.toLowerCase().endsWith('.xlsx'));
+  console.log(`Found ${excelFiles.length} Excel files in bucket`);
+  return excelFiles;
 }
 
 async function downloadSupabaseFileToBuffer(fileName) {
+  console.log(`Downloading ${fileName} from Supabase bucket`);
+  
   const { data, error } = await supabase.storage.from(SUPABASE_BUCKET).download(fileName);
   if (error) {
+    console.error(`Failed to download ${fileName}:`, error);
     throw error;
   }
   const arrayBuffer = await data.arrayBuffer();
+  console.log(`Downloaded ${fileName}, size: ${arrayBuffer.byteLength} bytes`);
   return Buffer.from(arrayBuffer);
 }
 
@@ -807,10 +822,12 @@ app.post('/api/parts', (req, res) => {
 // File management APIs
 app.get('/api/files', async (req, res) => {
   if (!supabase) {
+    console.error('GET /api/files failed: Supabase not configured');
     return res.status(500).json({ error: 'Supabase not configured' });
   }
 
   try {
+    console.log(`Listing files in bucket: ${SUPABASE_BUCKET}`);
     const { data, error } = await supabase.storage
       .from(SUPABASE_BUCKET)
       .list('', {
@@ -820,10 +837,12 @@ app.get('/api/files', async (req, res) => {
       });
 
     if (error) {
+      console.error('Supabase list error:', error);
       throw error;
     }
 
     const files = (data || []).filter(item => item.name && item.name.toLowerCase().endsWith('.xlsx'));
+    console.log(`Found ${files.length} Excel files`);
     res.json({ files: files.map(f => ({ name: f.name, size: f.metadata?.size || f.size || 0, updated: f.updated_at })) });
   } catch (error) {
     console.error('Error listing files:', error);
@@ -832,26 +851,39 @@ app.get('/api/files', async (req, res) => {
 });
 
 app.post('/api/upload', async (req, res) => {
+  console.log('Upload request received:', { fileName: req.body?.fileName, contentType: req.body?.contentType });
+  
   if (!supabase) {
-    return res.status(500).json({ error: 'Supabase not configured' });
+    console.error('Upload failed: Supabase not configured. SUPABASE_URL:', SUPABASE_URL, 'SUPABASE_BUCKET:', SUPABASE_BUCKET);
+    return res.status(500).json({ error: 'Supabase not configured. Please check SUPABASE_URL and SUPABASE_BUCKET environment variables.' });
   }
 
   const { fileName, content, contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } = req.body;
 
   if (!fileName || !content) {
+    console.error('Upload failed: Missing fileName or content');
     return res.status(400).json({ error: 'fileName and content are required' });
   }
 
   if (!fileName.toLowerCase().endsWith('.xlsx')) {
+    console.error(`Upload failed: Invalid file type - ${fileName}`);
     return res.status(400).json({ error: 'Only .xlsx files are allowed' });
   }
 
   try {
     // Convert base64 to buffer
-    const buffer = Buffer.from(content, 'base64');
+    let buffer;
+    try {
+      buffer = Buffer.from(content, 'base64');
+    } catch (parseError) {
+      console.error('Failed to parse base64 content:', parseError.message);
+      return res.status(400).json({ error: 'Invalid base64 content' });
+    }
+
+    console.log(`Uploading ${fileName} (${buffer.length} bytes) to bucket: ${SUPABASE_BUCKET}`);
 
     // Upload to Supabase storage
-    const { error } = await supabase.storage
+    const { data, error } = await supabase.storage
       .from(SUPABASE_BUCKET)
       .upload(fileName, buffer, {
         contentType,
@@ -859,13 +891,14 @@ app.post('/api/upload', async (req, res) => {
       });
 
     if (error) {
-      throw error;
+      console.error('Supabase upload error:', error.message, error);
+      return res.status(500).json({ error: `Upload failed: ${error.message}` });
     }
 
-    console.log(`Uploaded ${fileName} to Supabase bucket`);
-    res.json({ success: true, fileName, size: buffer.length });
+    console.log(`✓ Successfully uploaded ${fileName} to Supabase bucket. Path: ${data?.path || fileName}`);
+    res.json({ success: true, fileName, size: buffer.length, path: data?.path });
   } catch (error) {
-    console.error('Error uploading file:', error);
+    console.error('Unexpected error during upload:', error);
     res.status(500).json({ error: error.message });
   }
 });
