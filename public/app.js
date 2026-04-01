@@ -744,20 +744,20 @@ if (cancelEntryBtn) {
 
 entryForm.addEventListener('submit', handleEntrySubmit);
 
-// Upload event listeners
-toggleUploadFormBtn.addEventListener('click', () => {
-  const isHidden = uploadForm.hasAttribute('hidden');
-  toggleUploadForm(isHidden);
-});
-
-if (cancelUploadBtn) {
-  cancelUploadBtn.addEventListener('click', () => {
-    uploadForm.reset();
-    toggleUploadForm(false);
-  });
-}
-
-uploadForm.addEventListener('submit', handleFileUpload);
+// Upload functionality temporarily hidden/removed
+// toggleUploadFormBtn.addEventListener('click', () => {
+//   const isHidden = uploadForm.hasAttribute('hidden');
+//   toggleUploadForm(isHidden);
+// });
+//
+// if (cancelUploadBtn) {
+//   cancelUploadBtn.addEventListener('click', () => {
+//     uploadForm.reset();
+//     toggleUploadForm(false);
+//   });
+// }
+//
+// uploadForm.addEventListener('submit', handleFileUpload);
 
 // Drag and drop functionality
 uploadZone.addEventListener('click', () => {
