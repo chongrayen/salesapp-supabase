@@ -572,8 +572,18 @@ async function handleFileUpload(event) {
   uploadStatusEl.textContent = 'Uploading...';
   
   try {
-    const arrayBuffer = await selectedFile.arrayBuffer();
-    const base64Content = Buffer.from(arrayBuffer).toString('base64');
+    // Convert file to base64 using FileReader (browser-compatible)
+    const base64Content = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        // Result is like "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,ABC..."
+        const result = reader.result;
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(selectedFile);
+    });
     
     const response = await apiFetch('/api/upload', {
       method: 'POST',
