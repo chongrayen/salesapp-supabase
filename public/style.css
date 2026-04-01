@@ -296,6 +296,12 @@ body {
   margin-bottom: 1.75rem;
 }
 
+.panel-header {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
 .entry-form {
   margin-top: 1rem;
   display: flex;
@@ -340,16 +346,19 @@ body {
   gap: 1rem;
 }
 
-.entry-status {
+.entry-status,
+.upload-status {
   min-height: 1.2rem;
   font-size: 0.9rem;
 }
 
-.entry-status.error {
+.entry-status.error,
+.upload-status.error {
   color: #f87171;
 }
 
-.entry-status.success {
+.entry-status.success,
+.upload-status.success {
   color: #4ade80;
 }
 
@@ -388,10 +397,116 @@ body {
   color: white;
 }
 
+.primary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @media (max-width: 700px) {
   .remark-field {
     grid-column: span 1;
   }
+}
+
+/* Upload Form Styles */
+.upload-form {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 18px;
+  padding: 2.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: var(--accent);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.upload-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.upload-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.upload-zone p {
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.upload-hint {
+  color: var(--muted) !important;
+  font-size: 0.85rem !important;
+}
+
+.upload-status {
+  text-align: center;
+}
+
+/* File list styles */
+.file-list {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  gap: 1rem;
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-weight: 500;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.file-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.file-actions button {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
 }
 
 /* Login Overlay Styles */
@@ -543,4 +658,24 @@ body {
 /* App content wrapper */
 .app-content {
   min-height: 100vh;
+}
+
+/* Action button in header */
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: var(--text);
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.action-btn:hover {
+  border-color: var(--accent);
+  background: rgba(56, 189, 248, 0.1);
 }

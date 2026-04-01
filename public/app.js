@@ -235,7 +235,7 @@ loginForm.addEventListener('submit', handleLogin);
 window.logout = logout;
 
 // ==========================================
-// MAIN APP LOGIC (unchanged from original)
+// MAIN APP LOGIC
 // ==========================================
 
 const state = {
@@ -246,7 +246,8 @@ const state = {
     uniqueParts: 0,
     totalSpend: 0
   },
-  selectedId: null
+  selectedId: null,
+  files: []
 };
 
 const API_BASE = (window.__SALESAPP_API__ || '').replace(/\/$/, '');
@@ -259,6 +260,7 @@ if (openDataFolderBtn && window.__SHARED_FOLDER_URL__) {
   openDataFolderBtn.style.display = 'inline-flex';
 }
 
+// DOM Elements
 const listEl = document.getElementById('partList');
 const detailEl = document.getElementById('detailPanel');
 const searchInput = document.getElementById('searchInput');
@@ -271,6 +273,15 @@ const toggleEntryFormBtn = document.getElementById('toggleEntryForm');
 const entryForm = document.getElementById('entryForm');
 const entryStatusEl = document.getElementById('entryStatus');
 const cancelEntryBtn = document.getElementById('cancelEntryBtn');
+
+// Upload elements
+const toggleUploadFormBtn = document.getElementById('toggleUploadForm');
+const uploadForm = document.getElementById('uploadForm');
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const uploadStatusEl = document.getElementById('uploadStatus');
+const cancelUploadBtn = document.getElementById('cancelUploadBtn');
+const uploadBtn = document.getElementById('uploadBtn');
 
 const currency = (value) =>
   new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD', minimumFractionDigits: 2 }).format(value || 0);
@@ -471,6 +482,235 @@ async function handleEntrySubmit(event) {
   }
 }
 
+// File upload functionality
+let selectedFile = null;
+
+function toggleUploadForm(show) {
+  const shouldShow = typeof show === 'boolean' ? show : uploadForm.hasAttribute('hidden');
+  if (shouldShow) {
+    uploadForm.removeAttribute('hidden');
+    uploadStatusEl.textContent = '';
+    uploadStatusEl.classList.remove('error', 'success');
+    resetUploadZone();
+    loadFiles(); // Load file list when opening upload form
+  } else {
+    uploadForm.setAttribute('hidden', 'hidden');
+    uploadStatusEl.textContent = '';
+    uploadStatusEl.classList.remove('error', 'success');
+  }
+}
+
+function resetUploadZone() {
+  selectedFile = null;
+  uploadBtn.disabled = true;
+  if (uploadZone) {
+    uploadZone.innerHTML = `
+      <div class="upload-content">
+        <div class="upload-icon">📄</div>
+        <p>Drag & drop your Excel file here</p>
+        <p class="upload-hint">or click to browse</p>
+        <input type="file" id="fileInput" accept=".xlsx" hidden />
+      </div>
+    `;
+    // Reattach event listeners to the new file input
+    const newFileInput = document.getElementById('fileInput');
+    if (newFileInput) {
+      newFileInput.addEventListener('change', handleFileSelect);
+    }
+  }
+}
+
+function handleFileSelect(event) {
+  const file = event.target.files[0];
+  if (file) {
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+      uploadStatusEl.textContent = 'Only .xlsx files are allowed';
+      uploadStatusEl.classList.add('error');
+      selectedFile = null;
+      uploadBtn.disabled = true;
+      return;
+    }
+    
+    selectedFile = file;
+    uploadStatusEl.textContent = `Selected: ${file.name} (${formatFileSize(file.size)})`;
+    uploadStatusEl.classList.remove('error');
+    uploadBtn.disabled = false;
+    
+    // Update upload zone to show file info
+    uploadZone.innerHTML = `
+      <div class="upload-content">
+        <div class="upload-icon">📄</div>
+        <p><strong>${file.name}</strong></p>
+        <p class="upload-hint">${formatFileSize(file.size)} • Click to change file</p>
+        <input type="file" id="fileInput" accept=".xlsx" hidden />
+      </div>
+    `;
+    // Reattach event listener
+    const newFileInput = document.getElementById('fileInput');
+    if (newFileInput) {
+      newFileInput.addEventListener('change', handleFileSelect);
+    }
+  }
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function handleFileUpload(event) {
+  event.preventDefault();
+  
+  if (!selectedFile) {
+    uploadStatusEl.textContent = 'Please select a file first';
+    uploadStatusEl.classList.add('error');
+    return;
+  }
+  
+  uploadBtn.disabled = true;
+  uploadStatusEl.textContent = 'Uploading...';
+  
+  try {
+    const arrayBuffer = await selectedFile.arrayBuffer();
+    const base64Content = Buffer.from(arrayBuffer).toString('base64');
+    
+    const response = await apiFetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: selectedFile.name,
+        content: base64Content,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+    });
+    
+    if (!response.ok) {
+      const { error } = await response.json();
+      throw new Error(error || 'Upload failed');
+    }
+    
+    const result = await response.json();
+    uploadStatusEl.textContent = `✓ Uploaded ${selectedFile.name} successfully!`;
+    uploadStatusEl.classList.add('success');
+    
+    // Reset form
+    selectedFile = null;
+    uploadBtn.disabled = true;
+    
+    // Reload data and file list after a short delay
+    setTimeout(async () => {
+      await loadData();
+      await loadFiles();
+      resetUploadZone();
+    }, 1000);
+    
+  } catch (error) {
+    uploadStatusEl.textContent = `Upload failed: ${error.message}`;
+    uploadStatusEl.classList.add('error');
+    uploadBtn.disabled = false;
+  }
+}
+
+async function loadFiles() {
+  try {
+    const response = await apiFetch('/api/files');
+    if (!response.ok) {
+      throw new Error('Failed to load files');
+    }
+    const { files } = await response.json();
+    state.files = files || [];
+    renderFileList();
+  } catch (error) {
+    console.error('Error loading files:', error);
+  }
+}
+
+function renderFileList() {
+  // Remove existing file list if present
+  const existingList = document.getElementById('fileList');
+  if (existingList) {
+    existingList.remove();
+  }
+  
+  if (state.files.length === 0) {
+    return;
+  }
+  
+  const fileList = document.createElement('div');
+  fileList.id = 'fileList';
+  fileList.className = 'file-list';
+  
+  state.files.forEach(file => {
+    const fileItem = document.createElement('div');
+    fileItem.className = 'file-item';
+    
+    const fileInfo = document.createElement('div');
+    fileInfo.className = 'file-info';
+    
+    const fileName = document.createElement('div');
+    fileName.className = 'file-name';
+    fileName.textContent = file.name;
+    fileName.title = file.name;
+    
+    const fileMeta = document.createElement('div');
+    fileMeta.className = 'file-meta';
+    fileMeta.textContent = `${formatFileSize(file.size)} • ${new Date(file.updated).toLocaleDateString()}`;
+    
+    fileInfo.appendChild(fileName);
+    fileInfo.appendChild(fileMeta);
+    
+    const fileActions = document.createElement('div');
+    fileActions.className = 'file-actions';
+    
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'ghost-btn';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.style.color = '#f87171';
+    deleteBtn.style.borderColor = 'rgba(248, 113, 113, 0.4)';
+    deleteBtn.addEventListener('click', () => deleteFile(file.name));
+    
+    fileActions.appendChild(deleteBtn);
+    
+    fileItem.appendChild(fileInfo);
+    fileItem.appendChild(fileActions);
+    fileList.appendChild(fileItem);
+  });
+  
+  // Insert file list after upload form
+  uploadForm.parentNode.insertBefore(fileList, uploadForm.nextSibling);
+}
+
+async function deleteFile(fileName) {
+  if (!confirm(`Are you sure you want to delete "${fileName}"?`)) {
+    return;
+  }
+  
+  try {
+    const response = await apiFetch(`/api/files/${encodeURIComponent(fileName)}`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete file');
+    }
+    
+    // Reload files and data
+    await loadFiles();
+    await loadData();
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    uploadStatusEl.textContent = `Delete failed: ${error.message}`;
+    uploadStatusEl.classList.add('error');
+    setTimeout(() => {
+      uploadStatusEl.textContent = '';
+      uploadStatusEl.classList.remove('error');
+    }, 3000);
+  }
+}
+
+// Event listeners
 searchInput.addEventListener('input', () => {
   applyFilter();
 });
@@ -484,6 +724,7 @@ toggleEntryFormBtn.addEventListener('click', () => {
   const isHidden = entryForm.hasAttribute('hidden');
   toggleEntryForm(isHidden);
 });
+
 if (cancelEntryBtn) {
   cancelEntryBtn.addEventListener('click', () => {
     entryForm.reset();
@@ -492,6 +733,58 @@ if (cancelEntryBtn) {
 }
 
 entryForm.addEventListener('submit', handleEntrySubmit);
+
+// Upload event listeners
+toggleUploadFormBtn.addEventListener('click', () => {
+  const isHidden = uploadForm.hasAttribute('hidden');
+  toggleUploadForm(isHidden);
+});
+
+if (cancelUploadBtn) {
+  cancelUploadBtn.addEventListener('click', () => {
+    uploadForm.reset();
+    toggleUploadForm(false);
+  });
+}
+
+uploadForm.addEventListener('submit', handleFileUpload);
+
+// Drag and drop functionality
+uploadZone.addEventListener('click', () => {
+  fileInput.click();
+});
+
+uploadZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  uploadZone.classList.add('drag-over');
+});
+
+uploadZone.addEventListener('dragleave', () => {
+  uploadZone.classList.remove('drag-over');
+});
+
+uploadZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  
+  const files = e.dataTransfer.files;
+  if (files.length > 0) {
+    const file = files[0];
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+      uploadStatusEl.textContent = 'Only .xlsx files are allowed';
+      uploadStatusEl.classList.add('error');
+      return;
+    }
+    
+    // Simulate file selection
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
+    fileInput.files = dataTransfer.files;
+    
+    // Trigger file select handler
+    handleFileSelect({ target: fileInput });
+  }
+});
 
 // Initialize auth check
 checkAuth().catch((error) => {

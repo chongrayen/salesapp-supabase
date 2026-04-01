@@ -762,7 +762,7 @@ app.use((req, res, next) => {
     if (originAllowed) {
       res.header('Access-Control-Allow-Origin', origin);
       res.header('Vary', 'Origin');
-      res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+      res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,DELETE');
       res.header('Access-Control-Allow-Headers', 'Content-Type');
     }
     if (req.method === 'OPTIONS') {
@@ -801,6 +801,96 @@ app.post('/api/parts', (req, res) => {
     res.status(201).json({ saved: true, entry });
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+// File management APIs
+app.get('/api/files', async (req, res) => {
+  if (!supabase) {
+    return res.status(500).json({ error: 'Supabase not configured' });
+  }
+
+  try {
+    const { data, error } = await supabase.storage
+      .from(SUPABASE_BUCKET)
+      .list('', {
+        limit: 1000,
+        offset: 0,
+        sortBy: { column: 'name', order: 'asc' }
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    const files = (data || []).filter(item => item.name && item.name.toLowerCase().endsWith('.xlsx'));
+    res.json({ files: files.map(f => ({ name: f.name, size: f.metadata?.size || f.size || 0, updated: f.updated_at })) });
+  } catch (error) {
+    console.error('Error listing files:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/upload', async (req, res) => {
+  if (!supabase) {
+    return res.status(500).json({ error: 'Supabase not configured' });
+  }
+
+  const { fileName, content, contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } = req.body;
+
+  if (!fileName || !content) {
+    return res.status(400).json({ error: 'fileName and content are required' });
+  }
+
+  if (!fileName.toLowerCase().endsWith('.xlsx')) {
+    return res.status(400).json({ error: 'Only .xlsx files are allowed' });
+  }
+
+  try {
+    // Convert base64 to buffer
+    const buffer = Buffer.from(content, 'base64');
+
+    // Upload to Supabase storage
+    const { error } = await supabase.storage
+      .from(SUPABASE_BUCKET)
+      .upload(fileName, buffer, {
+        contentType,
+        upsert: true
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    console.log(`Uploaded ${fileName} to Supabase bucket`);
+    res.json({ success: true, fileName, size: buffer.length });
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/files/:fileName', async (req, res) => {
+  if (!supabase) {
+    return res.status(500).json({ error: 'Supabase not configured' });
+  }
+
+  const { fileName } = req.params;
+
+  try {
+    const { error } = await supabase.storage
+      .from(SUPABASE_BUCKET)
+      .remove([fileName]);
+
+    if (error) {
+      throw error;
+    }
+
+    console.log(`Deleted ${fileName} from Supabase bucket`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
